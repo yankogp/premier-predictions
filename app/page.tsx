@@ -321,7 +321,7 @@ export default function Home() {
           <input
             type="text"
             placeholder="Твоето име"
-            className="w-full border border-gray-300 rounded-xl px-4 py-3.5 mb-4 text-center text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-xl px-4 py-3.5 mb-4 text-center text-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSetName()}
@@ -552,7 +552,7 @@ export default function Home() {
                                 max="15"
                                 placeholder="0"
                                 disabled={isSaved || loading || hasResult}
-                                className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
+                                className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
                                 value={pred?.home || ""}
                                 onChange={(e) =>
                                   handlePredictionChange(
@@ -571,7 +571,7 @@ export default function Home() {
                                 max="15"
                                 placeholder="0"
                                 disabled={isSaved || loading || hasResult}
-                                className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
+                                className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
                                 value={pred?.away || ""}
                                 onChange={(e) =>
                                   handlePredictionChange(
@@ -620,7 +620,7 @@ export default function Home() {
                                       className={`text-sm px-3 py-1.5 rounded-full ${
                                         p.player_name === playerName
                                           ? "bg-blue-100 text-blue-800 font-medium"
-                                          : "bg-gray-100 text-gray-700"
+                                          : "bg-gray-100 text-gray-900"
                                       }`}
                                     >
                                       <span className="font-medium">
