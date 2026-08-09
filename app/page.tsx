@@ -322,10 +322,11 @@ export default function Home() {
             type="text"
             placeholder="Твоето име"
             className="w-full border border-gray-300 rounded-xl px-4 py-3.5 mb-4 text-center text-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ color: "#111827", WebkitTextFillColor: "#111827", caretColor: "#111827" }}
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSetName()}
-          />
+         />
           <button
             onClick={handleSetName}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-semibold text-lg transition active:scale-95"
