@@ -269,6 +269,18 @@ export default function Home() {
     });
   };
 
+  const canEditPrediction = (match: Match) => {
+    if (match.home_score !== null && match.away_score !== null) return false;
+
+    const time = match.match_time || "15:00";
+    const matchDateTime = new Date(`${match.match_date}T${time}:00`);
+    // Ако часът е в UK време, браузърът ще го третира като локален —
+    // засега е достатъчно точно за играта
+    const lockTime = new Date(matchDateTime.getTime() - 60 * 60 * 1000); // -1 час
+
+    return new Date() < lockTime;
+  };
+
   const calculateStandings = (): Standing[] => {
     const finishedMatches = matches.filter(
       (m) => m.home_score !== null && m.away_score !== null
@@ -618,6 +630,7 @@ export default function Home() {
                         const hasResult =
                           match.home_score !== null &&
                           match.away_score !== null;
+                        const editable = canEditPrediction(match);  
 
                         return (
                           <div
@@ -659,7 +672,7 @@ export default function Home() {
                                 min="0"
                                 max="15"
                                 placeholder="0"
-                                disabled={isSaved || loading || hasResult}
+                                disabled={!editable || loading}
                                 className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
                                 value={pred?.home || ""}
                                 onChange={(e) =>
@@ -678,7 +691,7 @@ export default function Home() {
                                 min="0"
                                 max="15"
                                 placeholder="0"
-                                disabled={isSaved || loading || hasResult}
+                                disabled={!editable || loading}
                                 className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
                                 value={pred?.away || ""}
                                 onChange={(e) =>
@@ -692,29 +705,44 @@ export default function Home() {
                             </div>
 
                             <div className="mt-5 text-center">
-                              {isSaved ? (
-                                <div className="inline-flex items-center gap-2 text-green-600 font-medium bg-green-50 px-4 py-2 rounded-full text-sm">
-                                  <span>✓</span>
-                                  <span>
-                                    Твоята: {pred.home} – {pred.away}
-                                  </span>
-                                </div>
-                              ) : hasResult ? (
-                                <div className="text-sm text-gray-500">
-                                  Мачът е приключил
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => savePrediction(match.id)}
-                                  disabled={loading}
-                                  className="bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:bg-blue-400 text-white px-8 py-2.5 rounded-xl font-medium transition"
-                                >
-                                  {loading
-                                    ? "Запазване..."
-                                    : "Запази прогноза"}
-                                </button>
-                              )}
-                            </div>
+  {!editable ? (
+    <div className="text-sm text-gray-500">
+      {hasResult
+        ? `Резултат: ${match.home_score} – ${match.away_score}`
+        : isSaved
+        ? `Заключена: ${pred?.home} – ${pred?.away}`
+        : "Прогнозите са затворени"}
+    </div>
+  ) : isSaved ? (
+    <div className="flex flex-col items-center gap-2">
+      <div className="inline-flex items-center gap-2 text-green-600 font-medium bg-green-50 px-4 py-2 rounded-full text-sm">
+        <span>✓</span>
+        <span>
+          Твоята: {pred.home} – {pred.away}
+        </span>
+      </div>
+      <button
+        onClick={() =>
+          setPredictions((prev) => ({
+            ...prev,
+            [match.id]: { ...prev[match.id], saved: false },
+          }))
+        }
+        className="text-sm text-blue-600 hover:underline"
+      >
+        Промени прогнозата
+      </button>
+    </div>
+  ) : (
+    <button
+      onClick={() => savePrediction(match.id)}
+      disabled={loading}
+      className="bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:bg-blue-400 text-white px-8 py-2.5 rounded-xl font-medium transition"
+    >
+      {loading ? "Запазване..." : "Запази прогноза"}
+    </button>
+  )}
+</div>
 
                             {others.length > 0 && (
                               <div className="mt-5 pt-4 border-t border-gray-100">
