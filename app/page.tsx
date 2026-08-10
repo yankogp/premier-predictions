@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import type { User, Session } from "@supabase/supabase-js";
 
 type Match = {
   id: number;
@@ -31,9 +32,17 @@ type Standing = {
 };
 
 export default function Home() {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [playerName, setPlayerName] = useState("");
-  const [nameInput, setNameInput] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+
+  const [matches, setMatches] = useState<Match[]>([]);
   const [predictions, setPredictions] = useState<{
     [key: number]: { home: string; away: string; saved?: boolean };
   }>({});
@@ -44,13 +53,34 @@ export default function Home() {
   const [view, setView] = useState<"matches" | "standings">("matches");
 
   useEffect(() => {
-    const savedName = localStorage.getItem("playerName");
-    if (savedName) {
-      setPlayerName(savedName);
-      loadPredictions(savedName);
-    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      const name =
+        session?.user?.user_metadata?.display_name ||
+        session?.user?.email?.split("@")[0] ||
+        "";
+      setPlayerName(name);
+      if (name) loadPredictions(name);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      const name =
+        session?.user?.user_metadata?.display_name ||
+        session?.user?.email?.split("@")[0] ||
+        "";
+      setPlayerName(name);
+      if (name) loadPredictions(name);
+    });
+
     loadMatches();
     loadAllPredictions();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const loadMatches = async () => {
@@ -62,11 +92,8 @@ export default function Home() {
       .order("match_date", { ascending: true })
       .order("match_time", { ascending: true });
 
-    if (error) {
-      console.error("Грешка при зареждане на мачове:", error);
-    } else {
-      setMatches(data || []);
-    }
+    if (error) console.error(error);
+    else setMatches(data || []);
     setLoadingMatches(false);
   };
 
@@ -77,7 +104,7 @@ export default function Home() {
       .eq("player_name", name);
 
     if (error) {
-      console.error("Грешка при зареждане на прогнози:", error);
+      console.error(error);
       return;
     }
 
@@ -100,32 +127,70 @@ export default function Home() {
       .select("match_id, player_name, home_score, away_score")
       .order("player_name");
 
+    if (error) console.error(error);
+    else setAllPredictions(data || []);
+  };
+
+  const handleRegister = async () => {
+    setAuthError("");
+    if (!email || !password || !displayName.trim()) {
+      setAuthError("Моля, попълни всички полета.");
+      return;
+    }
+    if (password.length < 6) {
+      setAuthError("Паролата трябва да е поне 6 символа.");
+      return;
+    }
+
+    setAuthLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          display_name: displayName.trim(),
+        },
+      },
+    });
+    setAuthLoading(false);
+
     if (error) {
-      console.error("Грешка при зареждане на всички прогнози:", error);
+      setAuthError(error.message);
       return;
     }
 
-    setAllPredictions(data || []);
+    if (data.user) {
+      setPlayerName(displayName.trim());
+      loadPredictions(displayName.trim());
+    }
   };
 
-  const handleSetName = () => {
-    if (!nameInput.trim()) {
-      alert("Моля, въведи име!");
+  const handleLogin = async () => {
+    setAuthError("");
+    if (!email || !password) {
+      setAuthError("Моля, попълни имейл и парола.");
       return;
     }
-    const name = nameInput.trim();
-    setPlayerName(name);
-    localStorage.setItem("playerName", name);
-    loadPredictions(name);
+
+    setAuthLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    setAuthLoading(false);
+
+    if (error) {
+      setAuthError(error.message);
+    }
   };
 
-  const handleChangeName = () => {
-    if (confirm("Сигурен ли си, че искаш да смениш името?")) {
-      localStorage.removeItem("playerName");
-      setPlayerName("");
-      setNameInput("");
-      setPredictions({});
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setPlayerName("");
+    setPredictions({});
+    setEmail("");
+    setPassword("");
+    setDisplayName("");
   };
 
   const handlePredictionChange = (
@@ -149,9 +214,8 @@ export default function Home() {
       alert("Моля, въведи резултат и за двата отбора!");
       return;
     }
-
     if (!playerName) {
-      alert("Първо въведи името си!");
+      alert("Трябва да си влязъл в профила си!");
       return;
     }
 
@@ -165,7 +229,6 @@ export default function Home() {
       .single();
 
     let error;
-
     if (existing) {
       const { error: updateError } = await supabase
         .from("predictions")
@@ -188,31 +251,24 @@ export default function Home() {
     setLoading(false);
 
     if (error) {
-      console.error(error);
       alert("Грешка при запазване: " + error.message);
       return;
     }
 
     setPredictions((prev) => ({
       ...prev,
-      [matchId]: {
-        ...prev[matchId],
-        saved: true,
-      },
+      [matchId]: { ...prev[matchId], saved: true },
     }));
-
     loadAllPredictions();
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("bg-BG", {
+    return new Date(dateStr).toLocaleDateString("bg-BG", {
       day: "numeric",
       month: "short",
     });
   };
 
-  // Изчисляване на точки
   const calculateStandings = (): Standing[] => {
     const finishedMatches = matches.filter(
       (m) => m.home_score !== null && m.away_score !== null
@@ -244,14 +300,12 @@ export default function Home() {
       const predHome = pred.home_score;
       const predAway = pred.away_score;
 
-      // Точен резултат
       if (predHome === actualHome && predAway === actualAway) {
         stats.points += 5;
         stats.exact += 1;
         return;
       }
 
-      // Правилен изход (1X2)
       const actualResult =
         actualHome > actualAway ? "H" : actualHome < actualAway ? "A" : "D";
       const predResult =
@@ -264,10 +318,7 @@ export default function Home() {
     });
 
     return Object.entries(playerStats)
-      .map(([player_name, stats]) => ({
-        player_name,
-        ...stats,
-      }))
+      .map(([player_name, stats]) => ({ player_name, ...stats }))
       .sort((a, b) => b.points - a.points || b.exact - a.exact);
   };
 
@@ -279,12 +330,11 @@ export default function Home() {
   );
 
   let filteredMatches = matches;
-
   if (selectedRound === "upcoming") {
     filteredMatches = matches.filter((m) => {
-      const matchDate = new Date(m.match_date);
-      matchDate.setHours(0, 0, 0, 0);
-      return matchDate >= today;
+      const d = new Date(m.match_date);
+      d.setHours(0, 0, 0, 0);
+      return d >= today;
     });
   } else if (selectedRound !== "all") {
     filteredMatches = matches.filter(
@@ -293,9 +343,7 @@ export default function Home() {
   }
 
   const matchesByRound = filteredMatches.reduce((acc, match) => {
-    if (!acc[match.round]) {
-      acc[match.round] = [];
-    }
+    if (!acc[match.round]) acc[match.round] = [];
     acc[match.round].push(match);
     return acc;
   }, {} as Record<number, Match[]>);
@@ -304,40 +352,106 @@ export default function Home() {
     .map(Number)
     .sort((a, b) => a - b);
 
-  const getPredictionsForMatch = (matchId: number) => {
-    return allPredictions.filter((p) => p.match_id === matchId);
-  };
+  const getPredictionsForMatch = (matchId: number) =>
+    allPredictions.filter((p) => p.match_id === matchId);
 
   const standings = calculateStandings();
 
-  if (!playerName) {
+  // ===== ЕКРАН ЗА ЛОГИН / РЕГИСТРАЦИЯ =====
+  if (!session || !user) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 flex items-center justify-center px-4">
-        <div className="bg-white/95 backdrop-blur p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className="bg-white/95 backdrop-blur p-8 rounded-2xl shadow-2xl max-w-md w-full">
+          <h1 className="text-3xl font-bold text-gray-900 mb-1 text-center">
             Premier League
           </h1>
-          <p className="text-gray-600 mb-8">Predictions 2026/27</p>
+          <p className="text-gray-600 mb-6 text-center">Predictions 2026/27</p>
+
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => {
+                setAuthMode("login");
+                setAuthError("");
+              }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                authMode === "login"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              Вход
+            </button>
+            <button
+              onClick={() => {
+                setAuthMode("register");
+                setAuthError("");
+              }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                authMode === "register"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              Регистрация
+            </button>
+          </div>
+
+          {authMode === "register" && (
+            <input
+              type="text"
+              placeholder="Твоето име (за класирането)"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 mb-3 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ color: "#111827", WebkitTextFillColor: "#111827" }}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          )}
+
           <input
-            type="text"
-            placeholder="Твоето име"
-            className="w-full border border-gray-300 rounded-xl px-4 py-3.5 mb-4 text-center text-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            style={{ color: "#111827", WebkitTextFillColor: "#111827", caretColor: "#111827" }}
-            value={nameInput}
-            onChange={(e) => setNameInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSetName()}
-         />
+            type="email"
+            placeholder="Имейл"
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 mb-3 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ color: "#111827", WebkitTextFillColor: "#111827" }}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            type="password"
+            placeholder="Парола (мин. 6 символа)"
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 mb-4 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ color: "#111827", WebkitTextFillColor: "#111827" }}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) =>
+              e.key === "Enter" &&
+              (authMode === "login" ? handleLogin() : handleRegister())
+            }
+          />
+
+          {authError && (
+            <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+              {authError}
+            </div>
+          )}
+
           <button
-            onClick={handleSetName}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-semibold text-lg transition active:scale-95"
+            onClick={authMode === "login" ? handleLogin : handleRegister}
+            disabled={authLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 rounded-xl font-semibold text-lg transition"
           >
-            Влез в играта
+            {authLoading
+              ? "Моля изчакай..."
+              : authMode === "login"
+              ? "Влез"
+              : "Регистрирай се"}
           </button>
         </div>
       </main>
     );
   }
 
+  // ===== ОСНОВНО ПРИЛОЖЕНИЕ =====
   return (
     <main className="min-h-screen bg-gray-50 relative overflow-hidden">
       <div
@@ -362,15 +476,14 @@ export default function Home() {
                 {playerName}
               </span>
               <button
-                onClick={handleChangeName}
+                onClick={handleLogout}
                 className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition"
               >
-                Смени име
+                Изход
               </button>
             </div>
           </div>
 
-          {/* Навигация */}
           <div className="flex gap-2">
             <button
               onClick={() => setView("matches")}
@@ -398,7 +511,6 @@ export default function Home() {
 
       <div className="relative max-w-2xl mx-auto px-4 py-6">
         {view === "standings" ? (
-          /* ===== КЛАСИРАНЕ ===== */
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Класиране</h2>
             <p className="text-sm text-gray-500 mb-6">
@@ -408,8 +520,6 @@ export default function Home() {
             {standings.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center text-gray-500">
                 Все още няма изиграни мачове с резултати.
-                <br />
-                Класирането ще се появи след първите срещи.
               </div>
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -461,7 +571,6 @@ export default function Home() {
             )}
           </div>
         ) : (
-          /* ===== МАЧОВЕ ===== */
           <>
             <div className="mb-6 flex items-center gap-3">
               <label className="text-sm font-medium text-gray-600 whitespace-nowrap">
@@ -534,11 +643,9 @@ export default function Home() {
                                   {match.home_team}
                                 </div>
                               </div>
-
                               <div className="text-gray-400 font-medium text-sm px-2">
                                 VS
                               </div>
-
                               <div className="flex-1 text-left">
                                 <div className="font-semibold text-lg sm:text-xl text-gray-900">
                                   {match.away_team}
