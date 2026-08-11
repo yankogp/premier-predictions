@@ -35,7 +35,9 @@ export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [playerName, setPlayerName] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authMode, setAuthMode] = useState<"login" | "register" | "forgot">(
+    "login"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -159,6 +161,14 @@ export default function Home() {
       return;
     }
 
+    if (data.user && !data.session) {
+      alert(
+        "Регистрацията е успешна! Провери имейла си и кликни на линка за потвърждение, после влез."
+      );
+      setAuthMode("login");
+      return;
+    }
+
     if (data.user) {
       setPlayerName(displayName.trim());
       loadPredictions(displayName.trim());
@@ -182,6 +192,30 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    setAuthError("");
+    if (!email) {
+      setAuthError("Моля, въведи имейла си.");
+      return;
+    }
+
+    setAuthLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setAuthLoading(false);
+
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+
+    alert(
+      "Изпратихме линк за нова парола на имейла ти. Провери и Spam папката."
+    );
+    setAuthMode("login");
   };
 
   const handleLogout = async () => {
@@ -216,6 +250,12 @@ export default function Home() {
     }
     if (!playerName) {
       alert("Трябва да си влязъл в профила си!");
+      return;
+    }
+
+    const match = matches.find((m) => m.id === matchId);
+    if (match && !canEditPrediction(match)) {
+      alert("Прогнозите за този мач вече са затворени.");
       return;
     }
 
@@ -274,9 +314,7 @@ export default function Home() {
 
     const time = match.match_time || "15:00";
     const matchDateTime = new Date(`${match.match_date}T${time}:00`);
-    // Ако часът е в UK време, браузърът ще го третира като локален —
-    // засега е достатъчно точно за играта
-    const lockTime = new Date(matchDateTime.getTime() - 60 * 60 * 1000); // -1 час
+    const lockTime = new Date(matchDateTime.getTime() - 60 * 60 * 1000);
 
     return new Date() < lockTime;
   };
@@ -369,7 +407,7 @@ export default function Home() {
 
   const standings = calculateStandings();
 
-  // ===== ЕКРАН ЗА ЛОГИН / РЕГИСТРАЦИЯ =====
+  // ===== ЛОГИН / РЕГИСТРАЦИЯ / ЗАБРАВЕНА ПАРОЛА =====
   if (!session || !user) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 flex items-center justify-center px-4">
@@ -379,34 +417,42 @@ export default function Home() {
           </h1>
           <p className="text-gray-600 mb-6 text-center">Predictions 2026/27</p>
 
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={() => {
-                setAuthMode("login");
-                setAuthError("");
-              }}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-                authMode === "login"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700"
-              }`}
-            >
-              Вход
-            </button>
-            <button
-              onClick={() => {
-                setAuthMode("register");
-                setAuthError("");
-              }}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-                authMode === "register"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700"
-              }`}
-            >
-              Регистрация
-            </button>
-          </div>
+          {authMode !== "forgot" && (
+            <div className="flex gap-2 mb-6">
+              <button
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError("");
+                }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                  authMode === "login"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+              >
+                Вход
+              </button>
+              <button
+                onClick={() => {
+                  setAuthMode("register");
+                  setAuthError("");
+                }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                  authMode === "register"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+              >
+                Регистрация
+              </button>
+            </div>
+          )}
+
+          {authMode === "forgot" && (
+            <p className="text-center text-gray-600 mb-4 text-sm">
+              Въведи имейла си и ще ти изпратим линк за нова парола.
+            </p>
+          )}
 
           {authMode === "register" && (
             <input
@@ -428,18 +474,20 @@ export default function Home() {
             onChange={(e) => setEmail(e.target.value)}
           />
 
-          <input
-            type="password"
-            placeholder="Парола (мин. 6 символа)"
-            className="w-full border border-gray-300 rounded-xl px-4 py-3 mb-4 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            style={{ color: "#111827", WebkitTextFillColor: "#111827" }}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) =>
-              e.key === "Enter" &&
-              (authMode === "login" ? handleLogin() : handleRegister())
-            }
-          />
+          {authMode !== "forgot" && (
+            <input
+              type="password"
+              placeholder="Парола (мин. 6 символа)"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 mb-4 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ color: "#111827", WebkitTextFillColor: "#111827" }}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                (authMode === "login" ? handleLogin() : handleRegister())
+              }
+            />
+          )}
 
           {authError && (
             <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
@@ -448,7 +496,13 @@ export default function Home() {
           )}
 
           <button
-            onClick={authMode === "login" ? handleLogin : handleRegister}
+            onClick={
+              authMode === "login"
+                ? handleLogin
+                : authMode === "register"
+                ? handleRegister
+                : handleForgotPassword
+            }
             disabled={authLoading}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 rounded-xl font-semibold text-lg transition"
           >
@@ -456,8 +510,36 @@ export default function Home() {
               ? "Моля изчакай..."
               : authMode === "login"
               ? "Влез"
-              : "Регистрирай се"}
+              : authMode === "register"
+              ? "Регистрирай се"
+              : "Изпрати линк за парола"}
           </button>
+
+          {authMode === "login" && (
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("forgot");
+                setAuthError("");
+              }}
+              className="w-full mt-3 text-sm text-blue-600 hover:underline"
+            >
+              Забравена парола?
+            </button>
+          )}
+
+          {authMode === "forgot" && (
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("login");
+                setAuthError("");
+              }}
+              className="w-full mt-3 text-sm text-gray-600 hover:underline"
+            >
+              Назад към вход
+            </button>
+          )}
         </div>
       </main>
     );
@@ -630,7 +712,7 @@ export default function Home() {
                         const hasResult =
                           match.home_score !== null &&
                           match.away_score !== null;
-                        const editable = canEditPrediction(match);  
+                        const editable = canEditPrediction(match);
 
                         return (
                           <div
@@ -705,44 +787,49 @@ export default function Home() {
                             </div>
 
                             <div className="mt-5 text-center">
-  {!editable ? (
-    <div className="text-sm text-gray-500">
-      {hasResult
-        ? `Резултат: ${match.home_score} – ${match.away_score}`
-        : isSaved
-        ? `Заключена: ${pred?.home} – ${pred?.away}`
-        : "Прогнозите са затворени"}
-    </div>
-  ) : isSaved ? (
-    <div className="flex flex-col items-center gap-2">
-      <div className="inline-flex items-center gap-2 text-green-600 font-medium bg-green-50 px-4 py-2 rounded-full text-sm">
-        <span>✓</span>
-        <span>
-          Твоята: {pred.home} – {pred.away}
-        </span>
-      </div>
-      <button
-        onClick={() =>
-          setPredictions((prev) => ({
-            ...prev,
-            [match.id]: { ...prev[match.id], saved: false },
-          }))
-        }
-        className="text-sm text-blue-600 hover:underline"
-      >
-        Промени прогнозата
-      </button>
-    </div>
-  ) : (
-    <button
-      onClick={() => savePrediction(match.id)}
-      disabled={loading}
-      className="bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:bg-blue-400 text-white px-8 py-2.5 rounded-xl font-medium transition"
-    >
-      {loading ? "Запазване..." : "Запази прогноза"}
-    </button>
-  )}
-</div>
+                              {!editable ? (
+                                <div className="text-sm text-gray-500">
+                                  {hasResult
+                                    ? `Резултат: ${match.home_score} – ${match.away_score}`
+                                    : isSaved
+                                    ? `Заключена: ${pred?.home} – ${pred?.away}`
+                                    : "Прогнозите са затворени"}
+                                </div>
+                              ) : isSaved ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <div className="inline-flex items-center gap-2 text-green-600 font-medium bg-green-50 px-4 py-2 rounded-full text-sm">
+                                    <span>✓</span>
+                                    <span>
+                                      Твоята: {pred.home} – {pred.away}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() =>
+                                      setPredictions((prev) => ({
+                                        ...prev,
+                                        [match.id]: {
+                                          ...prev[match.id],
+                                          saved: false,
+                                        },
+                                      }))
+                                    }
+                                    className="text-sm text-blue-600 hover:underline"
+                                  >
+                                    Промени прогнозата
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => savePrediction(match.id)}
+                                  disabled={loading}
+                                  className="bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:bg-blue-400 text-white px-8 py-2.5 rounded-xl font-medium transition"
+                                >
+                                  {loading
+                                    ? "Запазване..."
+                                    : "Запази прогноза"}
+                                </button>
+                              )}
+                            </div>
 
                             {others.length > 0 && (
                               <div className="mt-5 pt-4 border-t border-gray-100">
