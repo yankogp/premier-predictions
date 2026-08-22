@@ -33,6 +33,20 @@ type Standing = {
   total: number;
 };
 
+type LeagueRow = {
+  position: number;
+  team: string;
+  crest?: string | null;
+  played: number;
+  won: number;
+  draw: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  gd: number;
+  points: number;
+};
+
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -54,7 +68,12 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [selectedRound, setSelectedRound] = useState<string>("upcoming");
-  const [view, setView] = useState<"matches" | "standings">("matches");
+  const [view, setView] = useState<"matches" | "standings" | "league">(
+    "matches"
+  );
+
+  const [leagueTable, setLeagueTable] = useState<LeagueRow[]>([]);
+  const [loadingLeague, setLoadingLeague] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -83,6 +102,7 @@ export default function Home() {
 
     loadMatches();
     loadAllPredictions();
+    loadLeagueTable();
 
     return () => subscription.unsubscribe();
   }, []);
@@ -133,6 +153,18 @@ export default function Home() {
 
     if (error) console.error(error);
     else setAllPredictions(data || []);
+  };
+
+  const loadLeagueTable = async () => {
+    setLoadingLeague(true);
+    try {
+      const res = await fetch("/api/league-table");
+      const data = await res.json();
+      setLeagueTable(data.table || []);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingLeague(false);
   };
 
   const handleRegister = async () => {
@@ -244,6 +276,16 @@ export default function Home() {
     }));
   };
 
+  const canEditPrediction = (match: Match) => {
+    if (match.home_score !== null && match.away_score !== null) return false;
+
+    const time = match.match_time || "15:00";
+    const matchDateTime = new Date(`${match.match_date}T${time}:00`);
+    const lockTime = new Date(matchDateTime.getTime() - 60 * 60 * 1000);
+
+    return new Date() < lockTime;
+  };
+
   const savePrediction = async (matchId: number) => {
     const pred = predictions[matchId];
     if (!pred?.home || !pred?.away) {
@@ -309,16 +351,6 @@ export default function Home() {
       day: "numeric",
       month: "short",
     });
-  };
-
-  const canEditPrediction = (match: Match) => {
-    if (match.home_score !== null && match.away_score !== null) return false;
-
-    const time = match.match_time || "15:00";
-    const matchDateTime = new Date(`${match.match_date}T${time}:00`);
-    const lockTime = new Date(matchDateTime.getTime() - 60 * 60 * 1000);
-
-    return new Date() < lockTime;
   };
 
   const calculateStandings = (): Standing[] => {
@@ -409,6 +441,11 @@ export default function Home() {
 
   const standings = calculateStandings();
 
+  const finishedMatches = matches.filter(
+    (m) => m.home_score !== null && m.away_score !== null
+  );
+
+  // ===== ЛОГИН / РЕГИСТРАЦИЯ / ЗАБРАВЕНА ПАРОЛА =====
   if (!session || !user) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 flex items-center justify-center px-4">
@@ -546,6 +583,7 @@ export default function Home() {
     );
   }
 
+  // ===== ОСНОВНО ПРИЛОЖЕНИЕ =====
   return (
     <main className="min-h-screen bg-gray-50 relative overflow-hidden">
       <div
@@ -578,7 +616,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setView("matches")}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
@@ -599,12 +637,140 @@ export default function Home() {
             >
               Класиране
             </button>
+            <button
+              onClick={() => setView("league")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
+                view === "league"
+                  ? "bg-white text-blue-900"
+                  : "bg-white/10 hover:bg-white/20"
+              }`}
+            >
+              Таблица
+            </button>
           </div>
         </div>
       </header>
 
       <div className="relative max-w-2xl mx-auto px-4 py-6">
-        {view === "standings" ? (
+        {view === "league" ? (
+          /* ===== ОФИЦИАЛНА ТАБЛИЦА + РЕЗУЛТАТИ ===== */
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">
+              Premier League
+            </h2>
+            <p className="text-sm text-gray-500 mb-6">
+              Официално класиране • сезон 2026/27
+            </p>
+
+            {loadingLeague ? (
+              <div className="text-center text-gray-500 py-16">
+                Зареждане...
+              </div>
+            ) : leagueTable.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 text-center text-gray-500 mb-10">
+                Класирането още не е налично.
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto mb-10">
+                <table className="w-full text-sm min-w-[520px]">
+                  <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="text-left px-3 py-3 font-medium">#</th>
+                      <th className="text-left px-3 py-3 font-medium">Отбор</th>
+                      <th className="text-center px-2 py-3 font-medium">И</th>
+                      <th className="text-center px-2 py-3 font-medium">П</th>
+                      <th className="text-center px-2 py-3 font-medium">Р</th>
+                      <th className="text-center px-2 py-3 font-medium">З</th>
+                      <th className="text-center px-2 py-3 font-medium">ГР</th>
+                      <th className="text-center px-2 py-3 font-medium">Т</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leagueTable.map((row) => (
+                      <tr
+                        key={row.position}
+                        className="border-t border-gray-100"
+                      >
+                        <td className="px-3 py-2.5 text-gray-500 font-medium">
+                          {row.position}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            {row.crest && (
+                              <img
+                                src={row.crest}
+                                alt=""
+                                className="w-5 h-5 object-contain"
+                              />
+                            )}
+                            <span className="font-semibold text-gray-900">
+                              {row.team}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-center px-2 py-2.5">
+                          {row.played}
+                        </td>
+                        <td className="text-center px-2 py-2.5">{row.won}</td>
+                        <td className="text-center px-2 py-2.5">{row.draw}</td>
+                        <td className="text-center px-2 py-2.5">{row.lost}</td>
+                        <td className="text-center px-2 py-2.5">{row.gd}</td>
+                        <td className="text-center px-2 py-2.5 font-bold text-blue-700">
+                          {row.points}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Резултати</h3>
+            {finishedMatches.length === 0 ? (
+              <div className="bg-white rounded-2xl p-6 text-center text-gray-500">
+                Все още няма приключени мачове.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {finishedMatches.map((m) => (
+                  <div
+                    key={m.id}
+                    className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {m.home_team}
+                      </span>
+                      {m.home_crest && (
+                        <img
+                          src={m.home_crest}
+                          alt=""
+                          className="w-6 h-6 object-contain flex-shrink-0"
+                        />
+                      )}
+                    </div>
+                    <div className="font-bold text-gray-900 flex-shrink-0 px-1">
+                      {m.home_score} – {m.away_score}
+                    </div>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {m.away_crest && (
+                        <img
+                          src={m.away_crest}
+                          alt=""
+                          className="w-6 h-6 object-contain flex-shrink-0"
+                        />
+                      )}
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {m.away_team}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : view === "standings" ? (
+          /* ===== КЛАСИРАНЕ НА ИГРАТА ===== */
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Класиране</h2>
             <p className="text-sm text-gray-500 mb-6">
@@ -665,6 +831,7 @@ export default function Home() {
             )}
           </div>
         ) : (
+          /* ===== МАЧОВЕ ===== */
           <>
             <div className="mb-6 flex items-center gap-3">
               <label className="text-sm font-medium text-gray-600 whitespace-nowrap">
@@ -879,7 +1046,7 @@ export default function Home() {
         )}
 
         <p className="text-center text-gray-400 text-sm mt-10">
-          Premier League Predictions • Само за приятели
+          Premier League Predictions •
         </p>
       </div>
     </main>
