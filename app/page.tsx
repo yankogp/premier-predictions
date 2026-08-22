@@ -708,13 +708,13 @@ export default function Home() {
                             </span>
                           </div>
                         </td>
-                        <td className="text-center px-2 py-2.5">
+                        <td className="text-center px-2 py-2.5 text-gray-900">
                           {row.played}
                         </td>
-                        <td className="text-center px-2 py-2.5">{row.won}</td>
-                        <td className="text-center px-2 py-2.5">{row.draw}</td>
-                        <td className="text-center px-2 py-2.5">{row.lost}</td>
-                        <td className="text-center px-2 py-2.5">{row.gd}</td>
+                        <td className="text-center px-2 py-2.5 text-gray-900">{row.won}</td>
+                        <td className="text-center px-2 py-2.5 text-gray-900">{row.draw}</td>
+                        <td className="text-center px-2 py-2.5 text-gray-900">{row.lost}</td>
+                        <td className="text-center px-2 py-2.5 text-gray-900">{row.gd}</td>
                         <td className="text-center px-2 py-2.5 font-bold text-blue-700">
                           {row.points}
                         </td>
