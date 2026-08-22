@@ -14,6 +14,8 @@ type Match = {
   home_score: number | null;
   away_score: number | null;
   status: string;
+  home_crest?: string | null;
+  away_crest?: string | null;
 };
 
 type AllPrediction = {
@@ -407,7 +409,6 @@ export default function Home() {
 
   const standings = calculateStandings();
 
-  // ===== ЛОГИН / РЕГИСТРАЦИЯ / ЗАБРАВЕНА ПАРОЛА =====
   if (!session || !user) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 flex items-center justify-center px-4">
@@ -545,7 +546,6 @@ export default function Home() {
     );
   }
 
-  // ===== ОСНОВНО ПРИЛОЖЕНИЕ =====
   return (
     <main className="min-h-screen bg-gray-50 relative overflow-hidden">
       <div
@@ -732,58 +732,70 @@ export default function Home() {
                               )}
                             </div>
 
-                            <div className="flex items-center justify-between gap-3 mb-6">
-                              <div className="flex-1 text-right">
-                                <div className="font-semibold text-lg sm:text-xl text-gray-900">
+                            <div className="flex items-center justify-between gap-2 sm:gap-4 mb-4">
+                              <div className="flex-1 flex flex-col items-center text-center min-w-0">
+                                <div className="font-semibold text-sm sm:text-base text-gray-900 leading-tight mb-2">
                                   {match.home_team}
                                 </div>
+                                {match.home_crest && (
+                                  <img
+                                    src={match.home_crest}
+                                    alt=""
+                                    className="w-16 h-16 sm:w-20 sm:h-20 object-contain"
+                                  />
+                                )}
                               </div>
-                              <div className="text-gray-400 font-medium text-sm px-2">
-                                VS
+
+                              <div className="flex items-center justify-center gap-2 sm:gap-3 flex-shrink-0">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="15"
+                                  placeholder="0"
+                                  disabled={!editable || loading}
+                                  className="w-12 h-12 sm:w-14 sm:h-14 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
+                                  value={pred?.home || ""}
+                                  onChange={(e) =>
+                                    handlePredictionChange(
+                                      match.id,
+                                      "home",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                                <span className="text-2xl font-bold text-gray-300">
+                                  :
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="15"
+                                  placeholder="0"
+                                  disabled={!editable || loading}
+                                  className="w-12 h-12 sm:w-14 sm:h-14 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
+                                  value={pred?.away || ""}
+                                  onChange={(e) =>
+                                    handlePredictionChange(
+                                      match.id,
+                                      "away",
+                                      e.target.value
+                                    )
+                                  }
+                                />
                               </div>
-                              <div className="flex-1 text-left">
-                                <div className="font-semibold text-lg sm:text-xl text-gray-900">
+
+                              <div className="flex-1 flex flex-col items-center text-center min-w-0">
+                                <div className="font-semibold text-sm sm:text-base text-gray-900 leading-tight mb-2">
                                   {match.away_team}
                                 </div>
+                                {match.away_crest && (
+                                  <img
+                                    src={match.away_crest}
+                                    alt=""
+                                    className="w-16 h-16 sm:w-20 sm:h-20 object-contain"
+                                  />
+                                )}
                               </div>
-                            </div>
-
-                            <div className="flex items-center justify-center gap-3 sm:gap-4">
-                              <input
-                                type="number"
-                                min="0"
-                                max="15"
-                                placeholder="0"
-                                disabled={!editable || loading}
-                                className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
-                                value={pred?.home || ""}
-                                onChange={(e) =>
-                                  handlePredictionChange(
-                                    match.id,
-                                    "home",
-                                    e.target.value
-                                  )
-                                }
-                              />
-                              <span className="text-2xl font-bold text-gray-300">
-                                :
-                              </span>
-                              <input
-                                type="number"
-                                min="0"
-                                max="15"
-                                placeholder="0"
-                                disabled={!editable || loading}
-                                className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
-                                value={pred?.away || ""}
-                                onChange={(e) =>
-                                  handlePredictionChange(
-                                    match.id,
-                                    "away",
-                                    e.target.value
-                                  )
-                                }
-                              />
                             </div>
 
                             <div className="mt-5 text-center">
