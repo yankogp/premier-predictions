@@ -1,0 +1,2 @@
+curl -H "Authorization: Bearer sluchaen-tajn-niz-12345" \
+  "https://premier-predictions.vercel.app/api/sync-fixtures"

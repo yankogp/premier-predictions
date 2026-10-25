@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 const supabase = createClient(
@@ -22,21 +22,16 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  // В production изискваме cron header или Bearer secret
   if (process.env.NODE_ENV === "production") {
     const ok =
-      isVercelCron ||
-      (cronSecret && authHeader === `Bearer ${cronSecret}`);
+      isVercelCron || (cronSecret && authHeader === `Bearer ${cronSecret}`);
     if (!ok) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
 
   if (!FOOTBALL_TOKEN) {
-    return NextResponse.json(
-      { error: "Missing FOOTBALL_DATA_TOKEN" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Missing token" }, { status: 500 });
   }
 
   try {
@@ -49,9 +44,8 @@ export async function GET(request: Request) {
     );
 
     if (!response.ok) {
-      const text = await response.text();
       return NextResponse.json(
-        { error: "Football API error", details: text },
+        { error: "API error", details: await response.text() },
         { status: 500 }
       );
     }
@@ -76,7 +70,6 @@ export async function GET(request: Request) {
 
     for (const api of apiMatches) {
       const utc = new Date(api.utcDate);
-
       const match_date = utc.toLocaleDateString("en-CA", {
         timeZone: "Europe/Sofia",
       });
@@ -89,20 +82,18 @@ export async function GET(request: Request) {
 
       const home_score = api.score?.fullTime?.home ?? null;
       const away_score = api.score?.fullTime?.away ?? null;
-      const status = (api.status || "scheduled").toLowerCase();
+      const apiStatus = (api.status || "scheduled").toLowerCase();
       const round = api.matchday;
 
       const homeN = normalize(api.homeTeam?.name || "");
       const awayN = normalize(api.awayTeam?.name || "");
 
-      // 1) отбори + кръг; 2) fallback само отбори
       let db = dbMatches?.find(
         (m) =>
           normalize(m.home_team) === homeN &&
           normalize(m.away_team) === awayN &&
           m.round === round
       );
-
       if (!db) {
         db = dbMatches?.find(
           (m) =>
@@ -116,12 +107,20 @@ export async function GET(request: Request) {
         continue;
       }
 
+      // Принудително обновяване ако API е finished, а в базата още няма резултат
+      const forceUpdate =
+        apiStatus === "finished" &&
+        (db.home_score === null ||
+          db.away_score === null ||
+          db.status !== "finished");
+
       const needsUpdate =
+        forceUpdate ||
         db.match_date !== match_date ||
         db.match_time !== match_time ||
         db.home_score !== home_score ||
         db.away_score !== away_score ||
-        db.status !== status ||
+        (db.status || "").toLowerCase() !== apiStatus ||
         db.round !== round;
 
       if (!needsUpdate) {
@@ -136,7 +135,7 @@ export async function GET(request: Request) {
           match_time,
           home_score,
           away_score,
-          status,
+          status: apiStatus,
           round,
         })
         .eq("id", db.id);
@@ -150,7 +149,7 @@ export async function GET(request: Request) {
 
       updated++;
       changes.push(
-        `${db.home_team} vs ${db.away_team}: ${db.match_date} ${db.match_time} → ${match_date} ${match_time}`
+        `${db.home_team} vs ${db.away_team}: ${db.status || "?"} → ${apiStatus} (${home_score}-${away_score})`
       );
     }
 
@@ -160,12 +159,9 @@ export async function GET(request: Request) {
       updated,
       unchanged,
       notFound,
-      changes: changes.slice(0, 30),
+      changes: changes.slice(0, 40),
     });
   } catch (err: any) {
-    return NextResponse.json(
-      { error: err.message || "Unknown error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
